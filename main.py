@@ -16,6 +16,11 @@ items_file = 'input/items_small.csv'
 # Number of examinees for the initial test
 num_of_examinees = 200
 
+### IRT
+
+# Probabilty function for the 3PL model
+#   a, b, c - [float] item parameters
+#   t - [float] examinee theta
 def irt_prob(a, b, c, t):
     return c + (1 - c) / (1 + math.exp(-a * (t - b)))
 
@@ -33,6 +38,7 @@ items = np.delete(items, 0, 0)
 ### Generate examinee theta values
 
 examinees = sorted(np.random.normal(0, 1, num_of_examinees))
+
 
 ### Generate initial test results
 
@@ -53,26 +59,37 @@ for theta in examinees:
 init_test = np.delete(init_test, 0, 0)
 raw_score = np.delete(raw_score, 0, 0)
 
+
 ### Eliminate out of scope data
-# Examinees and items with all correct or incorrect answers
+# TODO Eliminate examinees and items with all correct or incorrect answers
 
 
 ### Genetic algorithm
 
-precision = [12, 12, 12]
-precision_total = 0
-precision_max = [0, 0, 0]
+# Gene encoding parameters
+precision = [12, 12, 12]    # Precision of encoding for each parameter (a, b and c)
+precision_total = 0         # Total lengh of the genome (sum of parameter precisions)
+precision_max = [0, 0, 0]   # Maximum integer value that can be stored with above specified precision
+# Calculate precision total and maximum
 for i in range(len(precision)):
-    precision_max[i] = math.pow(2, precision[i]) - 1
     precision_total += precision[i]
-
+    precision_max[i] = math.pow(2, precision[i]) - 1
+# Lower and upper boundaries for each of the three parameters
 range_a_lower = .3; range_a_upper =  3
 range_b_lower = -3; range_b_upper =  3
 range_c_lower =  0; range_c_upper = .5
 
+# Translates value from old to new range
+#   value - [float] value to translate
+#   omin, omax - [float] old range [omin, omax]
+#   nmin, nmax - [float] new range [nmin, nmax]
 def translate(value, omin, omax, nmin, nmax):
     return ((((value - omin) * (nmax - nmin)) / (omax - omin)) + nmin)
 
+# Makes sure value is in specified range by setting it to the near 
+#   boundary if it's below/above it
+#   value - [float]
+#   vmin, vmax - [float] range [vmin, vmax]
 def inrange(value, vmin, vmax):
     if (value < vmin):
         value = vmin
@@ -80,9 +97,16 @@ def inrange(value, vmin, vmax):
         value = vmax
     return value
 
+# Generates a random number with overall normal distribution
+#   loc - [float] distribution location
+#   scale - [float] distribution scale
 def variation(loc, scale):
     return np.random.normal(loc, scale, 1)[0]
 
+# Fitness (Error) function for the GA: error = -log(likelihood)
+# *Lower result = better
+#   index_item - [int] index of an item from the items array loaded from the csv file
+#   a, b, c - [float] parameters
 def fitness_func(index_item, a, b, c):
     L = 1
     for i in range(len(init_test[:, index_item])):
@@ -97,9 +121,16 @@ def fitness_func(index_item, a, b, c):
 # Chromosome class
 
 class chromosome:
+    # Initialization
+    #   chromosome().generate(...)  to generate a randomized chromosome
+    #   chromosome().create(...)    to create a chromosome with the specified genome
     def __init__(self):
         pass
 
+    # Radomly generate a chromosome
+    #   index_item - [int] used to determine a location for parameter b variation based on initial test raw score
+    #   c - [float] starting value for parameter c (guessing parameter)
+    #   var - [boolean] enables/disables variation
     def generate(self, index_item, c, var):
         # Normaly distributed parameter variation: np.random.normal(0, 1, 1)[0]
         self.index_item = index_item
@@ -139,14 +170,19 @@ class chromosome:
             self.genes[precision[index_a] + precision[index_b] + offset + i] = (int) (c[i])
         return self
 
+    # Creates a chromosome with the specified genome
+    #   index_item - [int] index of the item this chromosome coresonds to, needed for fitness calculation
+    #   genes - [numpy array]
     def create(self, index_item, genes):
         self.index_item = index_item
         self.genes = genes
         return self
 
+    # [numpy array] Returns genes
     def get_genes(self):
         return self.genes
 
+    # [3*float] Returns a tuplet of three parameters
     def get_params(self):
         a = 0
         for i in range(precision[index_a]):
@@ -162,6 +198,7 @@ class chromosome:
         c = translate(c, 0, precision_max[index_c], range_c_lower, range_c_upper)
         return a, b, c
 
+    # [Decimal] Calculates, sets and returns a fitness value
     def calc_fitness(self):
         # error function, lower is better
         # error = -log(likelihood)
@@ -173,6 +210,8 @@ class chromosome:
 # Algorithm
 
 class genalg:
+    # Initialize to default parameters
+    #   index_item - [int] coresponding item, needed for plotting functions and calculating fitness
     def __init__(self, index_item):
         self.population = 25
         self.mutation_rate = .1
@@ -189,6 +228,10 @@ class genalg:
         self.index_item = index_item
         self.top_to_print = 50
 
+    # Calculates fitness and weights, then outputs some stats and the population
+    #   generation - [int] generation index
+    #   save - [boolean] used to calculate algo wide fitness deltas when iterating throught
+    #       multiple generations
     def print(self, generation, save):
         # calc generation stats
         if (not save):
@@ -242,12 +285,14 @@ class genalg:
                     )
         print()
 
+    # Generates a population
     def generate(self):
         item_chromosomes = [None] * self.population
         for j in range(self.population):
             item_chromosomes[j] = chromosome().generate(self.index_item, items[self.index_item][index_c], j != 0)
         self.chromosomes = item_chromosomes
 
+    # Creates a new chromosome with crossover and mutation
     def create(self):
         pair = random.choices(self.chromosomes, self.weights, k=2)
         result = pair[0].get_genes().copy()
@@ -258,6 +303,7 @@ class genalg:
                 result[j] = pair[1].get_genes()[j]
         return chromosome().create(self.index_item, result)
 
+    # Creates and sets the next generation of chromosomes
     def next_gen(self):
         next_chromosomes = [None] * self.population
         for j in range(self.population):
@@ -267,6 +313,9 @@ class genalg:
                 next_chromosomes[j] = self.create()
         self.chromosomes = next_chromosomes
 
+    # Plots grafs of the raw item score and probabilty functions for parameters used to generate
+    #   data and parameters from the chromosome of the sepcified index
+    #   index - [int] chromosome index for probability function plotting
     def plot(self, index):
         mpl.style.use('seaborn')
         fig, axs = plt.subplots(1)
@@ -306,6 +355,7 @@ class genalg:
         plt.show()
         pass
 
+    # Interactivly iterates through generations of the GA
     def iterate(self):
         go_for = 1
         save = False
@@ -344,21 +394,13 @@ class genalg:
             generation += 1
         return ""
 
+## MAIN
+
+# Run GA for each loaded item
 for i in range(len(items)):
     g = genalg(i)
     g.generate()
     r = g.iterate()
     if (r == "q"):
         break;
-
-
-## Plots
-
-"""
-axs.set_xlim(-3.5, 3.5)
-axs.set_xticks(range(-3, 4))
-axs.set_ylim(0, 1)
-axs.set_yticks(np.arange(0, 1.1, .1))
-plt.show()
-"""
 
