@@ -1,4 +1,4 @@
 #!/bin/bash
 
-find main.py | entr -cs "python main.py"
+find src/*.py | entr -cs "python src/main.py"
 
