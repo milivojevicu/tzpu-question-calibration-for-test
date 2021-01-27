@@ -3,14 +3,19 @@
 import math
 import os
 
+from decimal import Decimal
+
 ### Vars
+
+# Euler's number
+e = Decimal("2.7182818284590452353602874713526624977572470936999595749669676277240766303535475945713821785251664274")
 
 # Parameter indices
 index_a = 0; index_b = 1; index_c = 2;
 # Item params csv file
 items_file = 'input/items_small.csv'
 # Number of examinees for the initial test
-num_of_examinees = 200
+num_of_examinees = 100
 
 ### Functions
 

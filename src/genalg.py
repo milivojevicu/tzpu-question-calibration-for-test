@@ -6,8 +6,8 @@ import numpy as np
 
 import random
 import math
-
-from decimal import Decimal
+import decimal
+from decimal import *
 
 from utils import *
 
@@ -33,7 +33,7 @@ range_c_lower =  0; range_c_upper = .5
 def translate(value, omin, omax, nmin, nmax):
     return ((((value - omin) * (nmax - nmin)) / (omax - omin)) + nmin)
 
-# Makes sure value is in specified range by setting it to the near 
+# Makes sure value is in specified range by setting it to the near
 #   boundary if it's below/above it
 #   value - [float]
 #   vmin, vmax - [float] range [vmin, vmax]
@@ -55,14 +55,12 @@ def variation(loc, scale):
 #   index_item - [int] index of an item from the items array loaded from the csv file
 #   a, b, c - [float] parameters
 def fitness_func(index_item, a, b, c, init_test, raw_score):
-    L = 1
+    L = Decimal(1)
     for i in range(len(init_test[:, index_item])):
-        u = init_test[i, index_item]
-        P = irt_prob(a, b, c, (translate(raw_score[i], 0, len(init_test[0]), -3, 3)))
-        Q = 1 - P
-        L *= pow(P, u) * pow(Q, 1 - u)
-    d = Decimal(L)
-    return -(d.ln())
+        u = Decimal((int) (init_test[i, index_item]))
+        P = Decimal(irt_prob(a, b, c, (translate(raw_score[i], 0, len(init_test[0]), -3, 3))))
+        L *= decimal.getcontext().power(P, u) * decimal.getcontext().power(Decimal(1) - P, Decimal(1) - u)
+    return -(L.ln())
 
 
 # Chromosome class
@@ -86,36 +84,36 @@ class chromosome:
         self.genes = np.array([0]*precision_total)
         self.init_test = init_test
         self.raw_score = raw_score
-        # a, init to random value with left side of normal distribution translated to [.3, 1] and right side to [1, 3]
-        a = inrange(variation(0, 1), -3, 3)
-        if (a < 0):
-            a = translate(a, -3, 0, .3, 1)
-        else:
-            a = translate(a, 0, 3, 1, 3)
-        if (not var):
-            a = 1
-        a = inrange(a, range_a_lower, range_a_upper)
-        a = bin((int) (translate(a, range_a_lower, range_a_upper, 0, precision_max[index_a])))[2:]
+        # a [.3, 1]
+        a = bin((int) (translate(
+            random.uniform(range_a_lower, range_a_upper),
+            range_a_lower,
+            range_a_upper,
+            0,
+            precision_max[index_a])
+            ))[2:]
         offset = precision[index_a] - len(a)
         for i in range(len(a)):
             self.genes[offset + i] = (int) (a[i])
-        # b, init value based on number of correct answers in the initial test
-        b = 0
-        for t in self.init_test:
-            b += t[index_item]
-        b = (1 - (b / (num_of_examinees * 1.0)))
-        b = translate(b, 0, 1, -3, 3)
-        if (var):
-            b += inrange(variation(0, .1), -1, 1)
-        b = bin((int) (translate(b, -3, 3, 0, precision_max[index_b])))[2:]
+        # b [-3, 3]
+        b = bin((int) (translate(
+            random.uniform(range_b_lower, range_b_upper),
+            range_b_lower,
+            range_b_upper,
+            0,
+            precision_max[index_b])
+            ))[2:]
         offset = precision[index_b] - len(b)
         for i in range(len(b)):
             self.genes[precision[index_a] + offset + i] = (int) (b[i])
-        # c, defaul value passed in constructor
-        if (var):
-            c += translate(inrange(variation(0, 1), -3, 3), -3, 3, -range_c_upper, range_c_upper)
-        c = inrange(c, range_c_lower, range_c_upper)
-        c = bin((int) (translate(c, range_c_lower, range_c_upper, 0, precision_max[index_c])))[2:]
+        # c [0, .5]
+        c = bin((int) (translate(
+            random.uniform(range_c_lower, range_c_upper),
+            range_c_lower,
+            range_c_upper,
+            0,
+            precision_max[index_c])
+            ))[2:]
         offset = precision[index_c] - len(c)
         for i in range(len(c)):
             self.genes[precision[index_a] + precision[index_b] + offset + i] = (int) (c[i])
@@ -172,9 +170,11 @@ class genalg:
     #   raw_score - ...
     #   examinees - ...
     def __init__(self, item_index, item, init_test, raw_score, examinees):
-        self.population = 25
-        self.mutation_rate = .1
-        self.crossover_rate = .3
+        self.population = 50
+        self.mutation_rate = 1.0 / (float) (precision_total)
+        # self.mutation_rate = .05
+        # self.carryover_rate = 1.0 / (float) (self.population)
+        self.carryover_rate = .05
         self.max_iterations = 10000
         self.chromosomes = [None] * self.population
         self.top_to_print = 50
@@ -213,13 +213,13 @@ class genalg:
         self.f_avg = self.f_sum / self.population
         # print generation stats
         print(
-            "Item:", self.item_index,
-            "\nGeneration:", generation,
-            "\nFitness:",
-            'sum={:.3f}(Δ={:.3f})'.format(self.f_sum, self.f_sum - self.f_sum_old),
-            'avg={:.3f}(Δ={:.3f})'.format(self.f_avg, self.f_avg - self.f_avg_old),
-            'min={:.3f}(Δ={:.3f})'.format(self.f_min, self.f_min - self.f_min_old)
-        )
+                "Item:", self.item_index,
+                "\nGeneration:", generation,
+                "\nFitness:",
+                'sum={:.3f}(Δ={:.3f})'.format(self.f_sum, self.f_sum - self.f_sum_old),
+                'avg={:.3f}(Δ={:.3f})'.format(self.f_avg, self.f_avg - self.f_avg_old),
+                'min={:.3f}(Δ={:.3f})'.format(self.f_min, self.f_min - self.f_min_old)
+                )
         print()
         # target
         print(" Gen :",
@@ -236,8 +236,15 @@ class genalg:
                     )
                 )
         # pick probability
+        weight_sum = 0
         for j in range(self.population):
-            self.weights[j] = 1 - ((float) (self.chromosomes[j].fitness) / self.f_sum)
+#            if (j > (int) (self.population * self.carryover_rate)):
+            weight_sum += ((float) (decimal.getcontext().power(e, -self.chromosomes[j].fitness)))
+        for j in range(self.population):
+#            if (j > (int) (self.population * self.carryover_rate)):
+            self.weights[j] = ((float) (decimal.getcontext().power(e, -self.chromosomes[j].fitness)) / weight_sum)
+#            else:
+#                self.weights[j] = 0;
         # population
         for j in range(min(self.top_to_print, self.population)):
             a, b, c = self.chromosomes[j].get_params()
@@ -246,6 +253,7 @@ class genalg:
                     '{:6.3f}'.format(b),
                     '{:6.3f}'.format(c),
                     'f={:8.3f}'.format(self.chromosomes[j].fitness),
+                    'w={:6.3f}%'.format(self.weights[j] * 100.0),
                     self.chromosomes[j].get_genes()
                     )
         print()
@@ -263,19 +271,19 @@ class genalg:
         pair = random.choices(self.chromosomes, self.weights, k=2)
         result = pair[0].get_genes().copy()
         for j in range(precision_total):
-            if (random.random() < self.mutation_rate):
-                result[j] = random.randint(0, 1)
-            elif (random.randint(0, 1) == 1):
+            if (random.randint(0, 1) == 1):
                 result[j] = pair[1].get_genes()[j]
+                if (random.random() < self.mutation_rate):
+                    result[j] = abs(result[j] - 1)
         return chromosome().create(self.item_index, result, self.init_test, self.raw_score)
 
     # Creates and sets the next generation of chromosomes
     def next_gen(self):
         next_chromosomes = [None] * self.population
         for j in range(self.population):
-            if (j < (int) (self.population * self.crossover_rate)):
+            if (j < (int) (self.population * self.carryover_rate)):
                 next_chromosomes[j] = chromosome() \
-                    .create(self.item_index, self.chromosomes[j].get_genes().copy(), self.init_test, self.raw_score)
+                        .create(self.item_index, self.chromosomes[j].get_genes().copy(), self.init_test, self.raw_score)
             else:
                 next_chromosomes[j] = self.create()
         self.chromosomes = next_chromosomes
@@ -330,13 +338,13 @@ class genalg:
                 if (go_for <= 0):
                     save = False
                     cmd = input("'q' to quit\
-                        \n'n' for next item\
-                        \n'p' for plot\
-                        \n'p [number]' for plot with chromosome n\
-                        \n'c [a] [b] [c]' for plot with custom parameters\
-                        \n[number] for n generations\
-                        \n<CR> for 1 generation\
-                        \n>>>")
+                            \n'n' for next item\
+                            \n'p' for plot\
+                            \n'p [number]' for plot with chromosome n\
+                            \n'c [a] [b] [c]' for plot with custom parameters\
+                            \n[number] for n generations\
+                            \n<CR> for 1 generation\
+                            \n>>>")
                     if (cmd == "q"):
                         return "q"
                     elif (cmd == "n"):
@@ -369,6 +377,7 @@ class genalg:
 
             self.chromosomes = \
                     sorted(self.chromosomes, key=lambda chromosome: chromosome.calc_fitness())
+#            self.chromosomes.reverse()
             cls()
             self.print(generation, save)
             generation += 1

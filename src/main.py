@@ -14,3 +14,4 @@ for i in range(len(items)):
     if (r == "q"):
         break;
 
+# TODO Estimate theta values based on calibrated items and perform another iteration of item calibration

@@ -17,7 +17,6 @@ with open(items_file) as csv_file:
         if (len(row) == 3):
             items = np.append(items, [[float(row[0]), float(row[1]), float(row[2])]], axis=0)
 items = np.delete(items, 0, 0)
-print("il", len(items))
 
 ### Generate examinee theta values
 
