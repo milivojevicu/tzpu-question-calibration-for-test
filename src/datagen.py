@@ -18,9 +18,10 @@ with open(items_file) as csv_file:
             items = np.append(items, [[float(row[0]), float(row[1]), float(row[2])]], axis=0)
 items = np.delete(items, 0, 0)
 
+
 ### Generate examinee theta values
 
-examinees = sorted(np.random.normal(0, 1, num_of_examinees))
+examinees = sorted(np.random.normal(0, 1.5, 50))
 
 
 ### Generate initial test results
@@ -35,14 +36,19 @@ for theta in examinees:
     for i in items:
         P = irt_prob(i[index_a], i[index_b], i[index_c], theta)
         init_test[index_examinee][index_item] = random.choices([0, 1], [1 - P, P], k=1)[0]
-        raw_score_tmp += init_test[index_examinee][index_item] 
+        raw_score_tmp += init_test[index_examinee][index_item]
         index_item += 1
     raw_score = np.append(raw_score, [[raw_score_tmp]], axis=0)
     index_examinee += 1
 init_test = np.delete(init_test, 0, 0)
 raw_score = np.delete(raw_score, 0, 0)
 
+### Eliminate examinees with all right or wrong answers
 
-### Eliminate out of scope data
-# TODO Eliminate examinees and items with all correct or incorrect answers
-
+i = np.size(raw_score) - 1
+while i > 0:
+    if raw_score[i][0] == np.size(items) / 3 or raw_score[i][0] == 0:
+        raw_score = np.delete(raw_score, i, axis=0)
+        init_test = np.delete(init_test, i, axis=0)
+        examinees = np.delete(examinees, i, axis=0)
+    i -= 1

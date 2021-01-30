@@ -6,12 +6,16 @@ import numpy as np
 
 import random
 import math
+import threading
 import decimal
 from decimal import *
 
 from utils import *
 
 ### Genetic algorithm
+
+# Max num of threads
+threads_max = 4
 
 # Gene encoding parameters
 precision = [12, 12, 12]    # Precision of encoding for each parameter (a, b and c)
@@ -170,14 +174,13 @@ class genalg:
     #   raw_score - ...
     #   examinees - ...
     def __init__(self, item_index, item, init_test, raw_score, examinees):
-        self.population = 50
+        self.population = 250
         self.mutation_rate = 1.0 / (float) (precision_total)
-        # self.mutation_rate = .05
-        # self.carryover_rate = 1.0 / (float) (self.population)
-        self.carryover_rate = .05
+        self.carryover_rate = 1.0 / (float) (self.population)
         self.max_iterations = 10000
         self.chromosomes = [None] * self.population
-        self.top_to_print = 50
+        self.top_to_print = 20
+        self.incest_threshold = 1
         self.f_sum = 0
         self.f_sum_old = 0
         self.f_min = 0
@@ -190,6 +193,8 @@ class genalg:
         self.init_test = init_test
         self.raw_score = raw_score
         self.examinees = examinees
+        self.plot_f_min = []
+        self.plot_f_avg = []
 
     # Calculates fitness and weights, then outputs some stats and the population
     #   generation - [int] generation index
@@ -211,6 +216,8 @@ class genalg:
             else:
                 self.f_min = min(self.f_min, fitness)
         self.f_avg = self.f_sum / self.population
+        self.plot_f_min.append(self.f_min)
+        self.plot_f_avg.append(self.f_avg)
         # print generation stats
         print(
                 "Item:", self.item_index,
@@ -218,7 +225,8 @@ class genalg:
                 "\nFitness:",
                 'sum={:.3f}(Δ={:.3f})'.format(self.f_sum, self.f_sum - self.f_sum_old),
                 'avg={:.3f}(Δ={:.3f})'.format(self.f_avg, self.f_avg - self.f_avg_old),
-                'min={:.3f}(Δ={:.3f})'.format(self.f_min, self.f_min - self.f_min_old)
+                'min={:.3f}(Δ={:.3f})'.format(self.f_min, self.f_min - self.f_min_old),
+                "\nIT={:.3f}".format(self.incest_threshold)
                 )
         print()
         # target
@@ -267,26 +275,72 @@ class genalg:
         self.chromosomes = item_chromosomes
 
     # Creates a new chromosome with crossover and mutation
-    def create(self):
-        pair = random.choices(self.chromosomes, self.weights, k=2)
-        result = pair[0].get_genes().copy()
-        for j in range(precision_total):
-            if (random.randint(0, 1) == 1):
-                result[j] = pair[1].get_genes()[j]
-                if (random.random() < self.mutation_rate):
-                    result[j] = abs(result[j] - 1)
-        return chromosome().create(self.item_index, result, self.init_test, self.raw_score)
+    def create(self, c_index):
+        same_counter = 0
+        while True:
+            pair = 0
+            counter = 0
+            while True:
+                pair = random.choices(self.chromosomes, self.weights, k=2)
+                distance = 0
+                for j in range(precision_total):
+                    if (pair[0].get_genes()[j] != pair[1].get_genes()[j]):
+                        distance += 1
+                if (distance > precision_total * self.incest_threshold):
+                    break
+                if (counter > 10):
+                    self.incest_threshold -= .001
+                    break
+                counter += 1
+
+            result = pair[0].get_genes().copy()
+            for j in range(precision_total):
+                if (random.randint(0, 1) == 1):
+                    result[j] = pair[1].get_genes()[j]
+                    if (random.random() < self.mutation_rate):
+                        result[j] = abs(result[j] - 1)
+
+            exists = False
+            for c in self.chromosomes:
+                gene_counter = 0
+                for j in range(precision_total):
+                    if (result[j] == c.get_genes()[j]):
+                        gene_counter += 1
+                if (gene_counter == precision_total):
+                    exists = True
+            if (not exists):
+                self.next_chromosomes[c_index] = chromosome().create(self.item_index, result, self.init_test, self.raw_score)
+                return
 
     # Creates and sets the next generation of chromosomes
     def next_gen(self):
-        next_chromosomes = [None] * self.population
-        for j in range(self.population):
-            if (j < (int) (self.population * self.carryover_rate)):
-                next_chromosomes[j] = chromosome() \
-                        .create(self.item_index, self.chromosomes[j].get_genes().copy(), self.init_test, self.raw_score)
-            else:
-                next_chromosomes[j] = self.create()
-        self.chromosomes = next_chromosomes
+        self.next_chromosomes = [None] * self.population
+        carryover_num = (int) (self.population * self.carryover_rate)
+
+        for j in range(carryover_num):
+            self.next_chromosomes[j] = chromosome() \
+                    .create(self.item_index, self.chromosomes[j].get_genes().copy(), self.init_test, self.raw_score)
+
+        counter = 0
+        threads = []
+        per_thread = (int) (math.ceil((len(self.chromosomes) - carryover_num) / threads_max))
+        per_start = carryover_num
+        per_end = carryover_num + per_thread
+
+        for i in range(threads_max):
+            threads.append(create_thread(counter, self, per_start, per_end))
+            counter += 1
+            per_start = per_end
+            per_end += per_thread
+            if (per_end > len(self.chromosomes)):
+                per_end = len(self.chromosomes)
+
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        self.chromosomes = self.next_chromosomes
 
     # Plots grafs of the raw item score and probabilty functions for parameters used to generate
     #   data and parameters from the chromosome of the sepcified index
@@ -299,7 +353,7 @@ class genalg:
         plot_raw_p = np.array([[.0]]*7)
         plot_raw_s = np.array([0]*7)
         plot_raw_t = np.array([0]*7)
-        for e in range(num_of_examinees):
+        for e in range(np.size(self.examinees)):
             theta = inrange(round(self.examinees[e]), -3, 3) + 3
             plot_raw_t[theta] += 1
             if (self.init_test[e][self.item_index] == 1):
@@ -328,6 +382,16 @@ class genalg:
         plt.show()
         pass
 
+    def plot_fitness(self):
+        mpl.style.use('seaborn')
+        fig, axs = plt.subplots(1)
+        plt.subplots_adjust(wspace=.5, hspace=.3)
+
+        axs.plot(self.plot_f_min, label="Min")
+
+        axs.set_xlim(0, len(self.plot_f_min) - 1)
+        plt.show()
+
     # Interactivly iterates through generations of the GA
     def iterate(self):
         go_for = 1
@@ -342,6 +406,7 @@ class genalg:
                             \n'p' for plot\
                             \n'p [number]' for plot with chromosome n\
                             \n'c [a] [b] [c]' for plot with custom parameters\
+                            \n'f' for fitness over time plot\
                             \n[number] for n generations\
                             \n<CR> for 1 generation\
                             \n>>>")
@@ -350,6 +415,11 @@ class genalg:
                     elif (cmd == "n"):
                         cls()
                         return ""
+                    elif (cmd == "f"):
+                        self.plot_fitness()
+                        cls()
+                        self.print(generation, False)
+                        continue
                     elif (len(cmd.split()) >= 1 and cmd.split()[0] == "p"):
                         if (len(cmd.split()) >= 2 and cmd.split()[1].isdigit()):
                             self.plot(*(self.chromosomes[int(cmd.split()[1])].get_params()))
@@ -366,6 +436,7 @@ class genalg:
                             isfloat(cmd.split()[1]) and
                             isfloat(cmd.split()[2]) and
                             isfloat(cmd.split()[3])):
+                        print(fitness_func(self.item_index, float(cmd.split()[1]), float(cmd.split()[2]), float(cmd.split()[3]), self.init_test, self.raw_score))
                         self.plot(float(cmd.split()[1]), float(cmd.split()[2]), float(cmd.split()[3]))
                         cls()
                         self.print(generation, False)
@@ -375,12 +446,52 @@ class genalg:
                 self.next_gen()
             go_for -= 1
 
-            self.chromosomes = \
-                    sorted(self.chromosomes, key=lambda chromosome: chromosome.calc_fitness())
-#            self.chromosomes.reverse()
+            counter = 0
+            threads = []
+            per_thread = (int) (math.ceil(len(self.chromosomes) / threads_max))
+            per_start = 0
+            per_end = per_thread
+
+            for i in range(threads_max):
+                threads.append(fitness_thread(counter, self.chromosomes, per_start, per_end))
+                counter += 1
+                per_start = per_end
+                per_end += per_thread
+                if (per_end > len(self.chromosomes)):
+                    per_end = len(self.chromosomes)
+
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+
+            self.chromosomes = sorted(self.chromosomes, key=lambda chromosome: chromosome.fitness)
+
             cls()
             self.print(generation, save)
             generation += 1
         return ""
 
+class fitness_thread (threading.Thread):
+    def __init__(self, threadID, c, s, e):
+        threading.Thread.__init__(self, daemon=True)
+        self.threadID = threadID
+        self.c = c
+        self.s = s
+        self.e = e
 
+    def run(self):
+        for i in range(self.s, self.e):
+            self.c[i].calc_fitness()
+
+class create_thread (threading.Thread):
+    def __init__(self, threadID, ga, s, e):
+        threading.Thread.__init__(self, daemon=True)
+        self.threadID = threadID
+        self.ga = ga
+        self.s = s
+        self.e = e
+
+    def run(self):
+        for i in range(self.s, self.e):
+            self.ga.create(i)

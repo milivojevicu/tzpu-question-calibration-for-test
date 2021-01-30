@@ -14,8 +14,6 @@ e = Decimal("2.71828182845904523536028747135266249775724709369995957496696762772
 index_a = 0; index_b = 1; index_c = 2;
 # Item params csv file
 items_file = 'input/items_small.csv'
-# Number of examinees for the initial test
-num_of_examinees = 100
 
 ### Functions
 
