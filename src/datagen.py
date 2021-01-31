@@ -5,11 +5,17 @@ import numpy as np
 import random
 import math
 import csv
+import os
 
 from utils import *
 
 ### Load item data
 
+default_items_file = 'input/items.csv'
+items_file = input("Input .csv file: ")
+if not os.path.isfile(items_file):
+    print("'{}' is not file or doesn't exist, using '{}' instead.".format(items_file, default_items_file))
+    items_file = default_items_file
 items = np.array([[0, 0, 0]])
 with open(items_file) as csv_file:
     csv_reader = csv.reader(csv_file, delimiter=',')
