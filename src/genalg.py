@@ -442,6 +442,9 @@ class genalg:
                         return "q"
                     elif (cmd == "n"):
                         cls()
+                        output = open('output.csv', 'a')
+                        wa, wb, wc = self.chromosomes[0].get_params()
+                        output.write("{}, {}, {}\n".format(wa, wb, wc))
                         return ""
                     elif (cmd == "f"):
                         self.plot_fitness()
