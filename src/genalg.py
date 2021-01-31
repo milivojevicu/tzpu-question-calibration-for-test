@@ -174,7 +174,7 @@ class genalg:
     #   raw_score - ...
     #   examinees - ...
     def __init__(self, item_index, item, init_test, raw_score, examinees):
-        self.population = 250
+        self.population = 100
         self.mutation_rate = 1.0 / (float) (precision_total)
         self.carryover_rate = 1.0 / (float) (self.population)
         self.max_iterations = 10000
@@ -266,12 +266,40 @@ class genalg:
                     )
         print()
 
+    def fit_and_sort(self, chromosomes):
+        counter = 0
+        threads = []
+        per_thread = (int) (math.ceil(len(chromosomes) / threads_max))
+        per_start = 0
+        per_end = per_thread
+
+        for i in range(threads_max):
+            threads.append(fitness_thread(counter, chromosomes, per_start, per_end))
+            counter += 1
+            per_start = per_end
+            per_end += per_thread
+            if (per_end > len(chromosomes)):
+                per_end = len(chromosomes)
+
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        return sorted(chromosomes, key=lambda chromosome: chromosome.fitness)
+
     # Generates a population
-    def generate(self):
-        item_chromosomes = [None] * self.population
-        for j in range(self.population):
+    def generate(self, mul = 1):
+        item_chromosomes = [None] * self.population * mul
+        for j in range(self.population * mul):
             item_chromosomes[j] = \
                     chromosome().generate(self.item_index, self.item[index_c], True, self.init_test, self.raw_score)
+
+        item_chromosomes = self.fit_and_sort(item_chromosomes)
+
+        if (mul > 1):
+            del item_chromosomes[self.population:]
+
         self.chromosomes = item_chromosomes
 
     # Creates a new chromosome with crossover and mutation
@@ -446,26 +474,7 @@ class genalg:
                 self.next_gen()
             go_for -= 1
 
-            counter = 0
-            threads = []
-            per_thread = (int) (math.ceil(len(self.chromosomes) / threads_max))
-            per_start = 0
-            per_end = per_thread
-
-            for i in range(threads_max):
-                threads.append(fitness_thread(counter, self.chromosomes, per_start, per_end))
-                counter += 1
-                per_start = per_end
-                per_end += per_thread
-                if (per_end > len(self.chromosomes)):
-                    per_end = len(self.chromosomes)
-
-            for t in threads:
-                t.start()
-            for t in threads:
-                t.join()
-
-            self.chromosomes = sorted(self.chromosomes, key=lambda chromosome: chromosome.fitness)
+            self.chromosomes = self.fit_and_sort(self.chromosomes)
 
             cls()
             self.print(generation, save)

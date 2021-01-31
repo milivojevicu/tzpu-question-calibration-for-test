@@ -21,7 +21,7 @@ items = np.delete(items, 0, 0)
 
 ### Generate examinee theta values
 
-examinees = sorted(np.random.normal(0, 1.5, 50))
+examinees = sorted(np.random.normal(0, 1.25, 75))
 
 
 ### Generate initial test results
