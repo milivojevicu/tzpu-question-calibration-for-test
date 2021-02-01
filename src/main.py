@@ -16,7 +16,7 @@ f.close()
 for i in range(len(items)):
     g = genalg(i, items[i], init_test, raw_score, examinees)
     print("Generating initial population...")
-    g.generate(10)
+    g.generate()
     r = g.iterate()
     if (r == "q"):
         break;

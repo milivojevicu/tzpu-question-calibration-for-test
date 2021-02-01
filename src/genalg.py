@@ -2,6 +2,7 @@
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 
 import random
@@ -174,12 +175,12 @@ class genalg:
     #   raw_score - ...
     #   examinees - ...
     def __init__(self, item_index, item, init_test, raw_score, examinees):
-        self.population = 100
+        self.population = 200
         self.mutation_rate = 1.0 / (float) (precision_total)
         self.carryover_rate = 1.0 / (float) (self.population)
         self.max_iterations = 10000
         self.chromosomes = [None] * self.population
-        self.top_to_print = 20
+        self.top_to_print = 10
         self.incest_threshold = 1
         self.f_sum = 0
         self.f_sum_old = 0
@@ -420,6 +421,45 @@ class genalg:
         axs.set_xlim(0, len(self.plot_f_min) - 1)
         plt.show()
 
+    def plot_scatter(self):
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+
+        f_max = min((float) (self.chromosomes[(int) (self.population * .5)].fitness), self.f_avg + self.f_min, (float) (self.chromosomes[-1].fitness))
+        axs = []
+        ays = []
+        azs = []
+        acol = []
+
+        for c in self.chromosomes:
+            xs, ys, zs = c.get_params()
+
+            col = (float) (c.fitness)
+            col = inrange(col, self.f_min, f_max)
+            col = translate(col, self.f_min, f_max, 0, 1)
+            col = 1 - col
+            r = 0
+            g = 0
+            b = 0
+
+            g = col * col * col
+            b = col * 2
+            if (b > 1):
+                b = 1 - (b - 1)
+            r = 1 - col
+
+            axs.append(xs)
+            ays.append(ys)
+            azs.append(zs)
+            acol.append([r, g, b])
+
+        ax.scatter(np.array(axs), np.array(ays), np.array(azs), zdir='z', c=np.array(acol))
+
+        ax.set_xlim(.3, 3)
+        ax.set_ylim(-3, 3)
+        ax.set_zlim(0, .5)
+        plt.show()
+
     # Interactivly iterates through generations of the GA
     def iterate(self):
         go_for = 1
@@ -434,7 +474,8 @@ class genalg:
                             \n'p' for plot\
                             \n'p [number]' for plot with chromosome n\
                             \n'c [a] [b] [c]' for plot with custom parameters\
-                            \n'f' for fitness over time plot\
+                            \n'f' for best fitness over time plot\
+                            \n's' for fitness scatter plot\
                             \n[number] for n generations\
                             \n<CR> for 1 generation\
                             \n>>>")
@@ -448,6 +489,11 @@ class genalg:
                         return ""
                     elif (cmd == "f"):
                         self.plot_fitness()
+                        cls()
+                        self.print(generation, False)
+                        continue
+                    elif (cmd == "s"):
+                        self.plot_scatter()
                         cls()
                         self.print(generation, False)
                         continue
